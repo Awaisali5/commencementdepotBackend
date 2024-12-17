@@ -20,9 +20,18 @@ app.use(
 );
 
 // CORS middleware
+// app.use(
+//   cors({
+//     origin: "http://localhost:3000",
+//     methods: ["GET", "POST"],
+//     credentials: true,
+//   })
+// );
+
+// CORS middleware
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000","https://commencementdepot.com"],
     methods: ["GET", "POST"],
     credentials: true,
   })
