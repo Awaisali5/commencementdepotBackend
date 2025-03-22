@@ -25,22 +25,21 @@ app.use(
 console.log("Express JSON middleware configured for webhooks.");
 
 // CORS middleware
-/*app.use(
-  cors({
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"],
-    credentials: true,
-  })
-);*/
-// CORS middleware
+// app.use(
+//   cors({
+//     origin: "http://localhost:3000",
+//     methods: ["GET", "POST"],
+//     credentials: true,
+//   })
+// );
+
 app.use(
     cors({
-        origin: ["https://commencementdepot.com", "http://localhost:3000", "http://localhost:4173", "http://46.202.178.147", ],
-        methods: ["GET", "POST", "PUT", "DELETE"],
+        origin: ["http://localhost:3000", "https://commencementdepot.com"],
+        methods: ["GET", "POST", "UPDATE", "DELETE", "PUT"],
         credentials: true,
     })
 );
-
 console.log("CORS middleware initialized with origin: http://localhost:3000");
 
 // Email transporter setup
@@ -100,7 +99,6 @@ const getPaymentStatusStyle = (status) => {
 };
 
 // Create order confirmation email template
-// Create order confirmation email template
 const createOrderEmailTemplate = (orderDetails) => {
         console.log("Creating order confirmation email template...");
         const items = orderDetails.items || [];
@@ -108,6 +106,17 @@ const createOrderEmailTemplate = (orderDetails) => {
         const billingAddress = orderDetails.billingAddress || shippingAddress || {};
         const paymentStatus = orderDetails.paymentStatus || "Cash on Delivery";
         const deliveryMethod = orderDetails.deliveryMethod || "home";
+        const donation = Number(orderDetails.donation || 0);
+        const tax = Number(orderDetails.tax || 0);
+        const discount = Number(orderDetails.discount || 0);
+        const shippingFee = Number(orderDetails.shippingFee || 0);
+        const subtotal = Number(orderDetails.subtotal || 0);
+        const actualTotal =
+            Number(subtotal) +
+            Number(tax) +
+            Number(shippingFee) +
+            Number(donation) -
+            Number(discount);
 
         console.log("Order Details Received:", JSON.stringify(orderDetails, null, 2));
 
@@ -168,13 +177,31 @@ const createOrderEmailTemplate = (orderDetails) => {
                 Number(price || 0).toFixed(2);
         };
 
-        // Add delivery method text and icon
+        // Enhanced delivery method function with detailed information
         const getDeliveryMethod = (method) => {
             if (method === "store") {
                 return {
                     text: "In-Store Pickup",
                     icon: "🏪",
                     info: "Ready for pickup within 24 hours",
+                };
+            } else if (method === "uspsground") {
+                return {
+                    text: "USPS Ground (3-7 Days)",
+                    icon: "🚚",
+                    info: "Estimated delivery: 3-7 business days",
+                };
+            } else if (method === "usps2day") {
+                return {
+                    text: "USPS 2-Day Air",
+                    icon: "✈️",
+                    info: "Estimated delivery: 2-3 business days",
+                };
+            } else if (method === "uspsnextday") {
+                return {
+                    text: "USPS Next Day Air",
+                    icon: "🛫",
+                    info: "Estimated delivery: 1-2 business days",
                 };
             } else {
                 return {
@@ -218,7 +245,7 @@ const createOrderEmailTemplate = (orderDetails) => {
             <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#FF6B00; border-radius:8px 8px 0 0;">
               <tr>
                 <td align="center" style="padding:30px 20px;">
-                  <h1 style="margin:0; font-size:28px; color:#ffffff; font-weight:600;">Order Confirmation</h1>
+                  <h1 style="margin:0; font-size:28px; color:#ffffff; font-weight:600;">Order Successfully Placed!</h1>
                   <p style="margin:5px 0 0; font-size:16px; color:#ffffff;">Thank you for your purchase!</p>
                 </td>
               </tr>
@@ -245,13 +272,13 @@ const createOrderEmailTemplate = (orderDetails) => {
                             <td width="50%" valign="top" align="right">
                               <p style="color:#4b5563; font-size:14px; margin:0;">Total Amount</p>
                               <p style="font-size:18px; font-weight:bold; color:#FF6B00; margin:4px 0;">$${formatPrice(
-                                orderDetails.totalAmount
+                                actualTotal
                               )}</p>
                             </td>
                           </tr>
                         </table>
                         
-                        <!-- Delivery Method -->
+                        <!-- Delivery Method - Enhanced with more detailed options -->
                         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e5e7eb; margin-top:15px; padding-top:15px;">
                           <tr>
                             <td>
@@ -297,7 +324,7 @@ const createOrderEmailTemplate = (orderDetails) => {
                             <tr>
                               <td style="background-color:#FFF4E5; border:1px solid #FFB27D; border-radius:4px; padding:10px;">
                                 <p style="margin:0; color:#E65300; font-size:14px;">
-                                  💡 Please have the exact amount ready at the time of delivery.
+                                  💡 Please have the payment ready when your order arrives.
                                 </p>
                               </td>
                             </tr>
@@ -320,35 +347,113 @@ const createOrderEmailTemplate = (orderDetails) => {
                         `
                             : ""
                         }
+                        
+                        <!-- Price Details (matches order success page) -->
+                        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e5e7eb; margin-top:15px; padding-top:15px;">
+                          <tr>
+                            <td colspan="2">
+                              <h3 style="margin:0 0 10px 0; font-size:15px; color:#1f2937;">Price Details</h3>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style="padding:3px 0; color:#4b5563; font-size:14px;">Subtotal</td>
+                            <td align="right" style="padding:3px 0; color:#111827; font-size:14px;">$${formatPrice(
+                              subtotal || actualTotal - tax - donation
+                            )}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding:3px 0; color:#4b5563; font-size:14px;">Tax</td>
+                            <td align="right" style="padding:3px 0; color:#111827; font-size:14px;">$${formatPrice(
+                              tax
+                            )}</td>
+                          </tr>
+                          ${
+                            shippingFee > 0
+                              ? `
+                            <tr>
+                              <td style="padding:3px 0; color:#4b5563; font-size:14px;">Shipping Fee</td>
+                              <td align="right" style="padding:3px 0; color:#111827; font-size:14px;">$${formatPrice(
+                                shippingFee
+                              )}</td>
+                            </tr>
+                          `
+                              : ""
+                          }
+                          ${
+                            discount > 0
+                              ? `
+                            <tr>
+                              <td style="padding:3px 0; color:#4b5563; font-size:14px;">Discount</td>
+                              <td align="right" style="padding:3px 0; color:#FF0000; font-size:14px;">-$${formatPrice(
+                                discount
+                              )}</td>
+                            </tr>
+                          `
+                              : ""
+                          }
+                          ${
+                            donation > 0
+                              ? `
+                            <tr>
+                              <td style="padding:3px 0; color:#4b5563; font-size:14px;">Donation</td>
+                              <td align="right" style="padding:3px 0; color:#3B82F6; font-size:14px;">$${formatPrice(
+                                donation
+                              )}</td>
+                            </tr>
+                          `
+                              : ""
+                          }
+                          <tr>
+                            <td colspan="2" style="padding-top:8px; margin-top:8px; border-top:1px solid #e5e7eb;"></td>
+                          </tr>
+                          <tr>
+                            <td style="padding:3px 0; color:#111827; font-size:14px; font-weight:bold;">Total</td>
+                            <td align="right" style="padding:3px 0; color:#FF6B00; font-size:14px; font-weight:bold;">$${formatPrice(
+                              actualTotal
+                            )}</td>
+                          </tr>
+                        </table>
                       </td>
                     </tr>
                   </table>
 
                   <!-- Items Section -->
-                  <h3 style="font-size:18px; color:#1f2937; margin:20px 0 10px;">Items Ordered</h3>
+                  <h3 style="font-size:18px; color:#1f2937; margin:20px 0 10px;">Order Summary</h3>
                   ${items
                     .map(
                       (item) => `
-                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:15px; border:1px solid #e5e7eb; border-radius:6px;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:15px; border:1px solid #e5e7eb; border-radius:6px; background-color:#f9fafb;">
                       <tr>
                         <td style="padding:15px;">
                           <table border="0" cellpadding="0" cellspacing="0" width="100%">
                             <tr>
-                              <td width="70%">
+                              <td width="80px" valign="top">
+                                ${
+                                  item.image
+                                    ? `<img src="${item.image}" alt="${item.name}" width="80" height="80" style="border-radius:4px; object-fit:cover;">`
+                                    : `<div style="width:80px; height:80px; background-color:#e5e7eb; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#9ca3af; font-size:10px; text-align:center;">No Image</div>`
+                                }
+                              </td>
+                              <td width="10px"></td>
+                              <td valign="top">
                                 <h4 style="margin:0 0 5px; font-size:16px; color:#111827;">${
                                   item.name
                                 }</h4>
-                                <p style="margin:0; color:#6b7280; font-size:14px;">
-                                  Quantity: ${item.quantity}
+                                <div style="margin-top:8px;">
+                                  <p style="margin:0; color:#6b7280; font-size:14px;">
+                                    Quantity: ${item.quantity}
+                                  </p>
                                   ${
                                     item.selectedSize
-                                      ? ` • Size: ${item.selectedSize}`
+                                      ? `<p style="margin:0; color:#6b7280; font-size:14px;">Size: ${item.selectedSize}</p>`
                                       : ""
                                   }
-                                </p>
+                                </div>
                               </td>
-                              <td width="30%" align="right" style="text-align:right; font-size:16px; font-weight:bold; color:#111827;">
-                                $${formatPrice(item.price * item.quantity)}
+                              <td width="100px" align="right" valign="top">
+                                <p style="margin:0; font-size:16px; font-weight:bold; color:#111827;">
+                                  $${formatPrice(item.price * item.quantity)}
+                                </p>
                               </td>
                             </tr>
                           </table>
@@ -364,24 +469,34 @@ const createOrderEmailTemplate = (orderDetails) => {
                   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
                     <tr>
                       <td style="padding:15px;">
-                        <p style="margin:0; font-size:16px; color:#111827; font-weight:bold;">${
-                          shippingAddress.fullName
-                        }</p>
-                        <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
-                          shippingAddress.addressLine1
-                        }</p>
-                        <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
-                          shippingAddress.city
-                        }, ${shippingAddress.state} ${shippingAddress.zip}</p>
-                        <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
-                          shippingAddress.country
-                        }</p>
-                        <p style="margin:5px 0; color:#4b5563; font-size:14px;">Phone: ${
-                          shippingAddress.phone
-                        }</p>
-                        <p style="margin:5px 0; color:#4b5563; font-size:14px;">Email: ${
-                          shippingAddress.email
-                        }</p>
+                        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                          <tr>
+                            <td width="50%" valign="top">
+                              <p style="margin:0; font-size:16px; color:#111827; font-weight:bold;">${
+                                shippingAddress.fullName
+                              }</p>
+                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
+                                shippingAddress.addressLine1 || ""
+                              }</p>
+                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
+                                shippingAddress.city || ""
+                              }${
+    shippingAddress.city && shippingAddress.state ? ", " : ""
+  }${shippingAddress.state || ""} ${shippingAddress.zip || ""}</p>
+                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
+                                shippingAddress.country || ""
+                              }</p>
+                            </td>
+                            <td width="50%" valign="top" align="right">
+                              <p style="margin:0; color:#4b5563; font-size:14px;"><span style="font-weight:bold;">Contact: </span>${
+                                shippingAddress.phone || ""
+                              }</p>
+                              <p style="margin:5px 0; color:#4b5563; font-size:14px;"><span style="font-weight:bold;">Email: </span>${
+                                shippingAddress.email || ""
+                              }</p>
+                            </td>
+                          </tr>
+                        </table>
                       </td>
                     </tr>
                   </table>
@@ -401,14 +516,51 @@ const createOrderEmailTemplate = (orderDetails) => {
                               shippingAddress.addressLine1 ===
                                 billingAddress.addressLine1 &&
                               shippingAddress.city === billingAddress.city)
-                              ? `<p style="margin:0; color:#4b5563; font-size:14px; font-style:italic;">Same as shipping address</p>`
+                              ? `
+                              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                  <td>
+                                    <div style="display:flex; align-items:center;">
+                                      <span style="display:inline-block; width:16px; height:16px; background-color:#FF6B00; border-radius:4px; margin-right:8px;"></span>
+                                      <span style="color:#4b5563; font-size:14px; font-style:italic;">Same as shipping address</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              `
                               : `
-                              <p style="margin:0; font-size:16px; color:#111827; font-weight:bold;">${billingAddress.fullName}</p>
-                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">${billingAddress.addressLine1}</p>
-                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">${billingAddress.city}, ${billingAddress.state} ${billingAddress.zip}</p>
-                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">${billingAddress.country}</p>
-                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">Phone: ${billingAddress.phone}</p>
-                              <p style="margin:5px 0; color:#4b5563; font-size:14px;">Email: ${billingAddress.email}</p>
+                              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                  <td width="50%" valign="top">
+                                    <p style="margin:0; font-size:16px; color:#111827; font-weight:bold;">${
+                                      billingAddress.fullName || ""
+                                    }</p>
+                                    <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
+                                      billingAddress.addressLine1 || ""
+                                    }</p>
+                                    <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
+                                      billingAddress.city || ""
+                                    }${
+                                  billingAddress.city && billingAddress.state
+                                    ? ", "
+                                    : ""
+                                }${billingAddress.state || ""} ${
+                                  billingAddress.zip || ""
+                                }</p>
+                                    <p style="margin:5px 0; color:#4b5563; font-size:14px;">${
+                                      billingAddress.country || ""
+                                    }</p>
+                                  </td>
+                                  <td width="50%" valign="top" align="right">
+                                    <p style="margin:0; color:#4b5563; font-size:14px;"><span style="font-weight:bold;">Contact: </span>${
+                                      billingAddress.phone || ""
+                                    }</p>
+                                    <p style="margin:5px 0; color:#4b5563; font-size:14px;"><span style="font-weight:bold;">Email: </span>${
+                                      billingAddress.email || ""
+                                    }</p>
+                                  </td>
+                                </tr>
+                              </table>
                             `
                           }
                         </td>
@@ -418,46 +570,33 @@ const createOrderEmailTemplate = (orderDetails) => {
                       : ""
                   }
 
-                  <!-- Order Summary -->
-                  <h3 style="font-size:18px; color:#1f2937; margin:20px 0 10px;">Order Summary</h3>
-                  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
+                  <!-- Action Buttons -->
+                  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:20px;">
                     <tr>
-                      <td style="padding:15px;">
-                        <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                          <tr>
-                            <td width="70%" style="padding:5px 0; color:#4b5563; font-size:14px;">Subtotal:</td>
-                            <td width="30%" align="right" style="padding:5px 0; text-align:right; font-size:14px; color:#111827;">$${formatPrice(
-                              orderDetails.subtotal || orderDetails.totalAmount
-                            )}</td>
-                          </tr>
-                          <tr>
-                            <td width="70%" style="padding:5px 0; color:#4b5563; font-size:14px;">Shipping Fee:</td>
-                            <td width="30%" align="right" style="padding:5px 0; text-align:right; font-size:14px; color:#111827;">$${formatPrice(
-                              orderDetails.shippingFee || 0
-                            )}</td>
-                          </tr>
-                          ${
-                            orderDetails.discount
-                              ? `
-                          <tr>
-                            <td width="70%" style="padding:5px 0; color:#4b5563; font-size:14px;">Discount:</td>
-                            <td width="30%" align="right" style="padding:5px 0; text-align:right; font-size:14px; color:#FF6B00;">-$${formatPrice(
-                              orderDetails.discount
-                            )}</td>
-                          </tr>
-                          `
-                              : ""
-                          }
-                          <tr>
-                            <td colspan="2" style="padding:0; height:1px; background-color:#e5e7eb; margin:10px 0;"></td>
-                          </tr>
-                          <tr>
-                            <td width="70%" style="padding:10px 0 5px 0; color:#111827; font-size:16px; font-weight:bold;">Total:</td>
-                            <td width="30%" align="right" style="padding:10px 0 5px 0; text-align:right; font-size:16px; font-weight:bold; color:#FF6B00;">$${formatPrice(
-                              orderDetails.totalAmount
-                            )}</td>
-                          </tr>
-                        </table>
+                      <td>
+                        <a href="http://localhost:3000/" style="display:block; background-color:#f3f4f6; color:#1f2937; padding:12px 0; border-radius:6px; text-align:center; text-decoration:none; font-weight:500; font-size:16px;">Continue Shopping</a>
+                      </td>
+                      <td width="20px"></td>
+                      <td>
+                        <a href="http://localhost:3000/profile/${
+                          shippingAddress.email
+                        }" style="display:block; background-color:#FF6B00; color:#ffffff; padding:12px 0; border-radius:6px; text-align:center; text-decoration:none; font-weight:500; font-size:16px;">View Orders</a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- Additional Information -->
+                  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:30px; border-top:1px solid #e5e7eb; padding-top:20px;">
+                    <tr>
+                      <td>
+                        <p style="margin:0; color:#4b5563; font-size:14px;">Estimated delivery time:</p>
+                        <p style="margin:0; color:#FF6B00; font-size:14px; font-weight:500;">${
+                          deliveryInfo.info
+                        }</p>
+                      </td>
+                      <td align="right">
+                        <p style="margin:0; color:#4b5563; font-size:14px;">Need help?</p>
+                        <a href="mailto:info@commencementdepot.com" style="color:#FF6B00; text-decoration:none; font-size:14px; font-weight:500;">info@commencementdepot.com</a>
                       </td>
                     </tr>
                   </table>
@@ -466,8 +605,7 @@ const createOrderEmailTemplate = (orderDetails) => {
                   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:30px; border-top:1px solid #e5e7eb; padding-top:20px;">
                     <tr>
                       <td align="center">
-                        <p style="margin:5px 0; font-size:14px; color:#6b7280;">Need help? Contact us at <a href="mailto:info@commencementdepot.com" style="color:#FF6B00; text-decoration:none;">info@commencementdepot.com</a></p>
-                        <p style="margin:5px 0; font-size:14px; color:#6b7280;">Estimated Delivery Time: 3-5 Business Days</p>
+                        <p style="margin:5px 0; font-size:14px; color:#6b7280;">Thank you for shopping with Commencement Depot!</p>
                         <p style="margin:15px 0 5px 0; font-size:14px; color:#6b7280;">© 2025 Commencement Depot. All rights reserved.</p>
                       </td>
                     </tr>
@@ -490,7 +628,20 @@ app.post("/confirm-order", async (req, res) => {
     console.log("[INFO] /confirm-order endpoint hit.");
     console.log("Request Body:", JSON.stringify(req.body, null, 2));
 
-    const { orderDetails, customerEmail } = req.body;
+    const { orderDetails, customerEmail, emailType } = req.body;
+
+    // Make sure all required properties exist even if they weren't sent
+    const enhancedOrderDetails = {
+      ...orderDetails,
+      donation: orderDetails.donation || 0,
+      tax: orderDetails.tax || 0,
+      discount: orderDetails.discount || 0,
+      shippingFee: orderDetails.shippingFee || 0,
+      subtotal:
+        orderDetails.subtotal ||
+        orderDetails.totalAmount - (orderDetails.tax || 0),
+      deliveryMethod: orderDetails.deliveryMethod || "home",
+    };
 
     if (!validateEmail(customerEmail)) {
       console.warn("[WARN] Invalid email provided:", customerEmail);
@@ -501,7 +652,10 @@ app.post("/confirm-order", async (req, res) => {
       "[INFO] Valid email detected. Attempting to send email to:",
       customerEmail
     );
-    console.log("Order Details:", JSON.stringify(orderDetails, null, 2));
+    console.log(
+      "Enhanced Order Details:",
+      JSON.stringify(enhancedOrderDetails, null, 2)
+    );
 
     const mailOptions = {
       from: {
@@ -509,10 +663,12 @@ app.post("/confirm-order", async (req, res) => {
         address: process.env.EMAIL_USER,
       },
       to: customerEmail,
-      subject: `Order Confirmation - Order #${orderDetails.orderId} (${
-        orderDetails.paymentStatus || "Pending"
+      subject: `${
+        emailType === "seller" ? "[New Order] " : ""
+      }Order Confirmation - Order #${enhancedOrderDetails.orderId} (${
+        enhancedOrderDetails.paymentStatus || "Pending"
       })`,
-      html: createOrderEmailTemplate(orderDetails),
+      html: createOrderEmailTemplate(enhancedOrderDetails),
     };
 
     console.log(
@@ -529,7 +685,7 @@ app.post("/confirm-order", async (req, res) => {
       res.json({
         success: true,
         message: "Order confirmation sent",
-        paymentStatus: orderDetails.paymentStatus,
+        paymentStatus: enhancedOrderDetails.paymentStatus,
       });
     } catch (emailError) {
       console.error("[ERROR] Failed to send email. Detailed email error:", {
@@ -550,6 +706,44 @@ app.post("/confirm-order", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to send confirmation email",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// Add a new endpoint to update order records with donation information
+app.post("/update-order", async (req, res) => {
+  try {
+    console.log("[INFO] /update-order endpoint hit.");
+    console.log("Request Body:", JSON.stringify(req.body, null, 2));
+
+    const { orderId, updates } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ error: "Order ID is required" });
+    }
+
+    // Here you would add the logic to update the order in your database
+    // This is a placeholder - the actual implementation would depend on your database solution
+    console.log(`[INFO] Updating order ${orderId} with:`, updates);
+
+    // Simulate a successful update
+    res.json({
+      success: true,
+      message: "Order updated successfully",
+      orderId,
+      updatedFields: Object.keys(updates),
+    });
+  } catch (error) {
+    console.error(
+      "[ERROR] Exception in /update-order endpoint:",
+      error.message
+    );
+    console.error("[DEBUG] Stack Trace:", error.stack);
+
+    res.status(500).json({
+      error: "Failed to update order",
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });
@@ -795,7 +989,14 @@ app.get("/test-email", async (req, res) => {
           zip: "12345",
           country: "Test Country",
           phone: "123-456-7890",
+          email: "test@example.com",
         },
+        donation: 5.0,
+        tax: 8.25,
+        discount: 10.0,
+        shippingFee: 15.99,
+        subtotal: 99.99,
+        deliveryMethod: "uspsground",
       }),
     });
 
