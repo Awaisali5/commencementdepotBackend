@@ -13,65 +13,57 @@ console.log("Initializing server...");
 
 // Middleware for parsing raw body (needed for webhook)
 app.use(
-    express.json({
-        verify: function(req, res, buf) {
-            if (req.originalUrl.startsWith("/webhook")) {
-                req.rawBody = buf.toString();
-                console.log("Raw body received for webhook:", req.rawBody);
-            }
-        },
-    })
+  express.json({
+    verify: function (req, res, buf) {
+      if (req.originalUrl.startsWith("/webhook")) {
+        req.rawBody = buf.toString();
+        console.log("Raw body received for webhook:", req.rawBody);
+      }
+    },
+  })
 );
 console.log("Express JSON middleware configured for webhooks.");
 
 // CORS middleware
-// app.use(
-//   cors({
-//     origin: "http://localhost:3000",
-//     methods: ["GET", "POST"],
-//     credentials: true,
-//   })
-// );
-
 app.use(
-    cors({
-        origin: ["http://localhost:3000", "https://commencementdepot.com"],
-        methods: ["GET", "POST", "UPDATE", "DELETE", "PUT"],
-        credentials: true,
-    })
+  cors({
+    origin: ["http://localhost:3000", "https://commencementdepot.com"],
+    methods: ["GET", "POST", "DELETE", "PUT"],
+    credentials: true,
+  })
 );
 console.log("CORS middleware initialized with origin: http://localhost:3000");
 
 // Email transporter setup
 const transporter = nodemailer.createTransport({
-    service: "gmail",
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-    tls: {
-        rejectUnauthorized: false,
-    },
+  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false,
+  },
 });
 
 // Log: Verify transporter connection
 transporter.verify((error, success) => {
-    if (error) {
-        console.error("SMTP connection error:", error);
-    } else {
-        console.log("Server is ready to send emails");
-    }
+  if (error) {
+    console.error("SMTP connection error:", error);
+  } else {
+    console.log("Server is ready to send emails");
+  }
 });
 
 // Helper function: Validate email format
 const validateEmail = (email) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const isValid = re.test(String(email).toLowerCase());
-    console.log(`Validating email: ${email} -> ${isValid ? "Valid" : "Invalid"}`);
-    return isValid;
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isValid = re.test(String(email).toLowerCase());
+  console.log(`Validating email: ${email} -> ${isValid ? "Valid" : "Invalid"}`);
+  return isValid;
 };
 
 // Test email validation (optional demo)
@@ -82,139 +74,190 @@ console.log("Server setup complete.");
 
 // Format price to two decimal places
 const formatPrice = (price) => {
-    const formattedPrice = Number(price || 0).toFixed(2);
-    console.log(`Formatting price: Input = ${price}, Output = ${formattedPrice}`);
-    return formattedPrice;
+  const formattedPrice = Number(price || 0).toFixed(2);
+  console.log(`Formatting price: Input = ${price}, Output = ${formattedPrice}`);
+  return formattedPrice;
 };
 
 // Get styles for payment status
 const getPaymentStatusStyle = (status) => {
-    const styles = {
-        Paid: { color: "#059669", bg: "#dcfce7", border: "#86efac" },
-        Pending: { color: "#ca8a04", bg: "#fef9c3", border: "#fde047" },
-        Failed: { color: "#dc2626", bg: "#fee2e2", border: "#fca5a5" },
-    };
-    console.log(`Getting payment style for status: ${status}`);
-    return styles[status] || styles["Pending"];
+  const styles = {
+    Paid: { color: "#059669", bg: "#dcfce7", border: "#86efac" },
+    Pending: { color: "#ca8a04", bg: "#fef9c3", border: "#fde047" },
+    Failed: { color: "#dc2626", bg: "#fee2e2", border: "#fca5a5" },
+  };
+  console.log(`Getting payment style for status: ${status}`);
+  return styles[status] || styles["Pending"];
 };
 
 // Create order confirmation email template
 const createOrderEmailTemplate = (orderDetails) => {
-        console.log("Creating order confirmation email template...");
-        const items = orderDetails.items || [];
-        const shippingAddress = orderDetails.shippingAddress || {};
-        const billingAddress = orderDetails.billingAddress || shippingAddress || {};
-        const paymentStatus = orderDetails.paymentStatus || "Cash on Delivery";
-        const deliveryMethod = orderDetails.deliveryMethod || "home";
-        const donation = Number(orderDetails.donation || 0);
-        const tax = Number(orderDetails.tax || 0);
-        const discount = Number(orderDetails.discount || 0);
-        const shippingFee = Number(orderDetails.shippingFee || 0);
-        const subtotal = Number(orderDetails.subtotal || 0);
-        const actualTotal =
-            Number(subtotal) +
-            Number(tax) +
-            Number(shippingFee) +
-            Number(donation) -
-            Number(discount);
+  console.log("Creating order confirmation email template...");
+  const items = orderDetails.items || [];
+  const shippingAddress = orderDetails.shippingAddress || {};
+  const billingAddress = orderDetails.billingAddress || shippingAddress || {};
+  const paymentStatus = orderDetails.paymentStatus || "Cash on Delivery";
+  const deliveryMethod = orderDetails.deliveryMethod || "home";
+  const donation = Number(orderDetails.donation || 0);
+  const tax = Number(orderDetails.tax || 0);
+  const discount = Number(orderDetails.discount || 0);
+  const shippingFee = Number(orderDetails.shippingFee || 0);
+  const subtotal = Number(orderDetails.subtotal || 0);
+  const returnMethod = orderDetails.returnMethod || ""; // Add return method
+  const returnShippingFee = Number(orderDetails.returnShippingFee || 0); // Add return shipping fee
 
-        console.log("Order Details Received:", JSON.stringify(orderDetails, null, 2));
+  const actualTotal =
+    Number(subtotal) +
+    Number(tax) +
+    Number(shippingFee) +
+    Number(returnShippingFee) + // Include return shipping fee in total
+    Number(donation) -
+    Number(discount);
 
-        // Get payment status styles
-        const getStatusStyle = (status) => {
-            const styles = {
-                Paid: { bg: "#FFEBDA", color: "#E65300", border: "#FF8A3D", icon: "✓" },
-                "CARD PAYMENT": {
-                    bg: "#FFEBDA",
-                    color: "#E65300",
-                    border: "#FF8A3D",
-                    icon: "💳",
-                },
-                "Cash on Delivery": {
-                    bg: "#FFF4E5",
-                    color: "#CC4A00",
-                    border: "#FFB27D",
-                    icon: "💵",
-                },
-                "CASH ON DELIVERY": {
-                    bg: "#FFF4E5",
-                    color: "#CC4A00",
-                    border: "#FFB27D",
-                    icon: "💵",
-                },
-                "IN-STORE CASH": {
-                    bg: "#FFF9EC",
-                    color: "#B54300",
-                    border: "#FFD2AD",
-                    icon: "💵",
-                },
-                "IN-STORE CARD": {
-                    bg: "#FFF0E0",
-                    color: "#D94C00",
-                    border: "#FFC299",
-                    icon: "💳",
-                },
-                Failed: { bg: "#FEE2E2", color: "#DC2626", border: "#FCA5A5", icon: "✕" },
-            };
+  // Extract consent information
+  const consentInfo = orderDetails.consentInfo || {
+    accepted: false,
+    terms: "",
+    customerName: "",
+    agreementDate: "",
+  };
 
-            console.log(`Getting status style for: ${status}`);
-            return (
-                styles[status] || {
-                    bg: "#FFF0E0",
-                    color: "#D94C00",
-                    border: "#FFC299",
-                    icon: "📦",
-                }
-            );
+  // Explicitly convert accepted value to boolean
+  const isConsentAccepted =
+    typeof consentInfo.accepted === "string"
+      ? consentInfo.accepted.toLowerCase() === "true"
+      : Boolean(consentInfo.accepted);
+
+  console.log("[DEBUG] Consent information for email:", {
+    original: consentInfo.accepted,
+    type: typeof consentInfo.accepted,
+    converted: isConsentAccepted,
+  });
+
+  // Get payment status styles
+  const getStatusStyle = (status) => {
+    const styles = {
+      Paid: { bg: "#FFEBDA", color: "#E65300", border: "#FF8A3D", icon: "✓" },
+      "CARD PAYMENT": {
+        bg: "#FFEBDA",
+        color: "#E65300",
+        border: "#FF8A3D",
+        icon: "💳",
+      },
+      "Cash on Delivery": {
+        bg: "#FFF4E5",
+        color: "#CC4A00",
+        border: "#FFB27D",
+        icon: "💵",
+      },
+      "CASH ON DELIVERY": {
+        bg: "#FFF4E5",
+        color: "#CC4A00",
+        border: "#FFB27D",
+        icon: "💵",
+      },
+      "IN-STORE CASH": {
+        bg: "#FFF9EC",
+        color: "#B54300",
+        border: "#FFD2AD",
+        icon: "💵",
+      },
+      "IN-STORE CARD": {
+        bg: "#FFF0E0",
+        color: "#D94C00",
+        border: "#FFC299",
+        icon: "💳",
+      },
+      Failed: { bg: "#FEE2E2", color: "#DC2626", border: "#FCA5A5", icon: "✕" },
+    };
+
+    console.log(`Getting status style for: ${status}`);
+    return (
+      styles[status] || {
+        bg: "#FFF0E0",
+        color: "#D94C00",
+        border: "#FFC299",
+        icon: "📦",
+      }
+    );
+  };
+
+  const statusStyle = getStatusStyle(paymentStatus);
+  console.log("Payment status style:", statusStyle);
+
+  const formatPrice = (price) => {
+    return typeof price === "number"
+      ? price.toFixed(2)
+      : Number(price || 0).toFixed(2);
+  };
+
+  // Enhanced delivery method function with detailed information
+  const getDeliveryMethod = (method) => {
+    if (method === "store") {
+      return {
+        text: "In-Store Pickup",
+        icon: "🏪",
+        info: "Ready for pickup within 24 hours",
+      };
+    } else if (method === "uspsground") {
+      return {
+        text: "USPS Ground (3-7 Days)",
+        icon: "🚚",
+        info: "Estimated delivery: 3-7 business days",
+      };
+    } else if (method === "usps2day") {
+      return {
+        text: "USPS 2-Day Air",
+        icon: "✈️",
+        info: "Estimated delivery: 2-3 business days",
+      };
+    } else if (method === "uspsnextday") {
+      return {
+        text: "USPS Next Day Air",
+        icon: "🛫",
+        info: "Estimated delivery: 1-2 business days",
+      };
+    } else {
+      return {
+        text: "Home Delivery",
+        icon: "🚚",
+        info: "Estimated delivery: 3-5 business days",
+      };
+    }
+  };
+
+  // Get return method display text
+  const getReturnMethodDisplay = (method) => {
+    switch (method) {
+      case "no-returns":
+        return { text: "No Returns", info: "This item cannot be returned" };
+      case "in-store":
+        return {
+          text: "In-Store Returns",
+          info: "Return to our store within 30 days",
         };
-
-        const statusStyle = getStatusStyle(paymentStatus);
-        console.log("Payment status style:", statusStyle);
-
-        const formatPrice = (price) => {
-            return typeof price === "number" ?
-                price.toFixed(2) :
-                Number(price || 0).toFixed(2);
+      case "shipping":
+        return {
+          text: "Return by Mail",
+          info:
+            returnShippingFee > 0
+              ? `Return shipping fee: $${formatPrice(returnShippingFee)}`
+              : "Return shipping included",
         };
-
-        // Enhanced delivery method function with detailed information
-        const getDeliveryMethod = (method) => {
-            if (method === "store") {
-                return {
-                    text: "In-Store Pickup",
-                    icon: "🏪",
-                    info: "Ready for pickup within 24 hours",
-                };
-            } else if (method === "uspsground") {
-                return {
-                    text: "USPS Ground (3-7 Days)",
-                    icon: "🚚",
-                    info: "Estimated delivery: 3-7 business days",
-                };
-            } else if (method === "usps2day") {
-                return {
-                    text: "USPS 2-Day Air",
-                    icon: "✈️",
-                    info: "Estimated delivery: 2-3 business days",
-                };
-            } else if (method === "uspsnextday") {
-                return {
-                    text: "USPS Next Day Air",
-                    icon: "🛫",
-                    info: "Estimated delivery: 1-2 business days",
-                };
-            } else {
-                return {
-                    text: "Home Delivery",
-                    icon: "🚚",
-                    info: "Estimated delivery: 3-5 business days",
-                };
-            }
+      case "store-return":
+        return {
+          text: "Store Return",
+          info: "Return to our store within 30 days",
         };
+      default:
+        return { text: method || "Not specified", info: "" };
+    }
+  };
 
-        const deliveryInfo = getDeliveryMethod(deliveryMethod);
+  const deliveryInfo = getDeliveryMethod(deliveryMethod);
+  const returnInfo = getReturnMethodDisplay(returnMethod);
 
-        return `
+  return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -278,7 +321,7 @@ const createOrderEmailTemplate = (orderDetails) => {
                           </tr>
                         </table>
                         
-                        <!-- Delivery Method - Enhanced with more detailed options -->
+                        <!-- Delivery Method Section -->
                         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e5e7eb; margin-top:15px; padding-top:15px;">
                           <tr>
                             <td>
@@ -297,6 +340,31 @@ const createOrderEmailTemplate = (orderDetails) => {
                               }</p>
                             </td>
                           </tr>
+                        </table>
+
+                        <!-- Return Option Section - NEW -->
+                        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e5e7eb; margin-top:15px; padding-top:15px;">
+                          <tr>
+                            <td>
+                              <p style="color:#4b5563; font-size:14px; margin:0;">Return Option</p>
+                            </td>
+                            <td align="right">
+                              <span style="display:inline-block; background-color:#E6F0FF; color:#0066CC; border:1px solid #99C2FF; padding:4px 12px; border-radius:9999px; font-size:14px; font-weight:500;">
+                                ${returnInfo.text}
+                              </span>
+                            </td>
+                          </tr>
+                          ${
+                            returnInfo.info
+                              ? `
+                          <tr>
+                            <td colspan="2" style="padding-top:8px;">
+                              <p style="margin:0; color:#0066CC; font-size:14px;">${returnInfo.info}</p>
+                            </td>
+                          </tr>
+                          `
+                              : ""
+                          }
                         </table>
                         
                         <!-- Payment Status -->
@@ -348,6 +416,34 @@ const createOrderEmailTemplate = (orderDetails) => {
                             : ""
                         }
                         
+                        <!-- Terms Accepted Section -->
+                        ${
+                          isConsentAccepted
+                            ? `
+                          <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e5e7eb; margin-top:15px; padding-top:15px;">
+                            <tr>
+                              <td style="background-color:#ecfdf5; border:1px solid #a7f3d0; border-radius:4px; padding:10px;">
+                                <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                                  <tr>
+                                    <td width="24" valign="top">
+                                      <span style="display:inline-block; width:20px; height:20px; background-color:#059669; color:#ffffff; border-radius:50%; text-align:center; line-height:20px; font-weight:bold;">✓</span>
+                                    </td>
+                                    <td width="10"></td>
+                                    <td>
+                                      <h3 style="margin:0; font-size:16px; color:#065f46;">Terms Accepted</h3>
+                                      <p style="margin:5px 0 0; color:#065f46; font-size:14px;">
+                                        ${consentInfo.customerName} has agreed to the ${consentInfo.terms} on ${consentInfo.agreementDate}.
+                                      </p>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        `
+                            : ""
+                        }
+                        
                         <!-- Price Details (matches order success page) -->
                         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e5e7eb; margin-top:15px; padding-top:15px;">
                           <tr>
@@ -358,7 +454,7 @@ const createOrderEmailTemplate = (orderDetails) => {
                           <tr>
                             <td style="padding:3px 0; color:#4b5563; font-size:14px;">Subtotal</td>
                             <td align="right" style="padding:3px 0; color:#111827; font-size:14px;">$${formatPrice(
-                              subtotal || actualTotal - tax - donation
+                              subtotal
                             )}</td>
                           </tr>
                           <tr>
@@ -374,6 +470,18 @@ const createOrderEmailTemplate = (orderDetails) => {
                               <td style="padding:3px 0; color:#4b5563; font-size:14px;">Shipping Fee</td>
                               <td align="right" style="padding:3px 0; color:#111827; font-size:14px;">$${formatPrice(
                                 shippingFee
+                              )}</td>
+                            </tr>
+                          `
+                              : ""
+                          }
+                          ${
+                            returnShippingFee > 0
+                              ? `
+                            <tr>
+                              <td style="padding:3px 0; color:#4b5563; font-size:14px;">Return Shipping Fee</td>
+                              <td align="right" style="padding:3px 0; color:#111827; font-size:14px;">$${formatPrice(
+                                returnShippingFee
                               )}</td>
                             </tr>
                           `
@@ -570,21 +678,6 @@ const createOrderEmailTemplate = (orderDetails) => {
                       : ""
                   }
 
-                  <!-- Action Buttons -->
-                  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:20px;">
-                    <tr>
-                      <td>
-                        <a href="http://localhost:3000/" style="display:block; background-color:#f3f4f6; color:#1f2937; padding:12px 0; border-radius:6px; text-align:center; text-decoration:none; font-weight:500; font-size:16px;">Continue Shopping</a>
-                      </td>
-                      <td width="20px"></td>
-                      <td>
-                        <a href="http://localhost:3000/profile/${
-                          shippingAddress.email
-                        }" style="display:block; background-color:#FF6B00; color:#ffffff; padding:12px 0; border-radius:6px; text-align:center; text-decoration:none; font-weight:500; font-size:16px;">View Orders</a>
-                      </td>
-                    </tr>
-                  </table>
-
                   <!-- Additional Information -->
                   <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top:30px; border-top:1px solid #e5e7eb; padding-top:20px;">
                     <tr>
@@ -641,7 +734,19 @@ app.post("/confirm-order", async (req, res) => {
         orderDetails.subtotal ||
         orderDetails.totalAmount - (orderDetails.tax || 0),
       deliveryMethod: orderDetails.deliveryMethod || "home",
+      // Ensure consentInfo is included and has default values if not provided
+      consentInfo: orderDetails.consentInfo || {
+        accepted: false,
+        terms: "",
+        customerName: "",
+        agreementDate: "",
+      },
     };
+
+    console.log(
+      "[INFO] Enhanced Order Details with consent:",
+      enhancedOrderDetails.consentInfo
+    );
 
     if (!validateEmail(customerEmail)) {
       console.warn("[WARN] Invalid email provided:", customerEmail);
@@ -724,6 +829,12 @@ app.post("/update-order", async (req, res) => {
       return res.status(400).json({ error: "Order ID is required" });
     }
 
+    // Check for consent information in updates
+    if (updates.consentInfo) {
+      console.log("[INFO] Consent information received for order:", orderId);
+      console.log("[INFO] Consent details:", updates.consentInfo);
+    }
+
     // Here you would add the logic to update the order in your database
     // This is a placeholder - the actual implementation would depend on your database solution
     console.log(`[INFO] Updating order ${orderId} with:`, updates);
@@ -755,7 +866,7 @@ app.post("/create-payment-intent", async (req, res) => {
   console.log("Received request at /create-payment-intent");
 
   try {
-    const { items } = req.body;
+    const { items, consentInfo } = req.body;
     console.log("Request body:", req.body);
 
     // Validate input
@@ -767,6 +878,29 @@ app.post("/create-payment-intent", async (req, res) => {
     const amount = Math.round(items[0].amount * 100);
     console.log(`Calculated amount (in cents): ${amount}`);
 
+    // Log consent information if present
+    if (consentInfo) {
+      console.log("Consent information received:", consentInfo);
+    }
+
+    // Prepare metadata with consent info if available
+    const metadata = {
+      description: items[0].description || "Order payment",
+      source: "COMMENCEMENT DEPOT",
+    };
+
+    // Add consent info to metadata if available
+    if (consentInfo && consentInfo.accepted) {
+      // We need to stringify the object since metadata values must be strings
+      metadata.consentInfo = JSON.stringify({
+        accepted: consentInfo.accepted,
+        terms: consentInfo.terms,
+        customerName: consentInfo.customerName,
+        agreementDate: consentInfo.agreementDate,
+      });
+      console.log("Added consent info to payment intent metadata");
+    }
+
     // Create payment intent with IMPORTANT CHANGES
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
@@ -775,11 +909,8 @@ app.post("/create-payment-intent", async (req, res) => {
       capture_method: "automatic",
       // Use payment method types array instead of automatic_payment_methods
       payment_method_types: ["card"],
-      // Store description in metadata
-      metadata: {
-        description: items[0].description || "Order payment",
-        source: "COMMENCEMENT DEPOT",
-      },
+      // Store description and consent info in metadata
+      metadata: metadata,
       // Add statement descriptor to help customers recognize the charge
       statement_descriptor: "Commencement Depot",
       // This is what you'll see in your Stripe dashboard
@@ -793,6 +924,7 @@ app.post("/create-payment-intent", async (req, res) => {
       id: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
       capture_method: paymentIntent.capture_method, // Log this for debugging
+      metadata: paymentIntent.metadata, // Log metadata to confirm consent info was stored
     });
 
     // Send response
@@ -840,6 +972,26 @@ app.post("/webhook", async (req, res) => {
           orderId: paymentIntent.metadata.orderId,
         });
 
+        // Extract consent info from metadata if available
+        let consentInfo = {
+          accepted: false,
+          terms: "",
+          customerName: "",
+          agreementDate: "",
+        };
+
+        if (paymentIntent.metadata && paymentIntent.metadata.consentInfo) {
+          try {
+            consentInfo = JSON.parse(paymentIntent.metadata.consentInfo);
+            console.log(
+              "📝 Consent information found in payment metadata:",
+              consentInfo
+            );
+          } catch (e) {
+            console.error("❌ Error parsing consent info from metadata:", e);
+          }
+        }
+
         // Send updated confirmation email with paid status
         if (paymentIntent.receipt_email) {
           console.log(
@@ -852,6 +1004,7 @@ app.post("/webhook", async (req, res) => {
             paymentId: paymentIntent.id,
             amount: paymentIntent.amount / 100,
             paymentDate: new Date().toISOString(),
+            consentInfo: consentInfo, // Include the consent info in email
           };
 
           try {
@@ -888,6 +1041,22 @@ app.post("/webhook", async (req, res) => {
           orderId: failedPayment.metadata?.orderId,
         });
 
+        // Extract consent info from metadata if available
+        let failedConsentInfo = {
+          accepted: false,
+          terms: "",
+          customerName: "",
+          agreementDate: "",
+        };
+
+        if (failedPayment.metadata && failedPayment.metadata.consentInfo) {
+          try {
+            failedConsentInfo = JSON.parse(failedPayment.metadata.consentInfo);
+          } catch (e) {
+            console.error("❌ Error parsing consent info from metadata:", e);
+          }
+        }
+
         // Send payment failed notification
         if (failedPayment.receipt_email) {
           console.log(
@@ -905,6 +1074,7 @@ app.post("/webhook", async (req, res) => {
               html: createOrderEmailTemplate({
                 ...failedPayment.metadata,
                 paymentStatus: "Failed",
+                consentInfo: failedConsentInfo,
               }),
             });
             console.log("✅ Payment failure email sent successfully.");
@@ -997,6 +1167,13 @@ app.get("/test-email", async (req, res) => {
         shippingFee: 15.99,
         subtotal: 99.99,
         deliveryMethod: "uspsground",
+        // Add test consent information
+        consentInfo: {
+          accepted: true,
+          terms: "Rental Terms and Conditions Agreement",
+          customerName: "Test User",
+          agreementDate: "March 23, 2025",
+        },
       }),
     });
 
